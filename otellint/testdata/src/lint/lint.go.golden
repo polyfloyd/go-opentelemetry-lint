@@ -39,7 +39,7 @@ func SpanOkOtherStyle(ctx context.Context, db *sql.DB) error {
 }
 
 func SpanMisspelled(ctx context.Context, db *sql.DB) error {
-	ctx, span := tracer().Start(ctx, "queryThing") // want "OpenTelemetry span misspelled, expected `SpanMisspelled`"
+	ctx, span := tracer().Start(ctx, "SpanMisspelled") // want "OpenTelemetry span misspelled, expected `SpanMisspelled`"
 	defer span.End()
 
 	row := db.QueryRowContext(ctx, `SELECT * FROM sample_text`)
@@ -51,12 +51,15 @@ type querier struct {
 }
 
 func (q *querier) Query(ctx context.Context) error { // want "Missing OpenTelemetry span"
+	ctx, span := tracer().Start(ctx, "(*querier).Query")
+	defer span.End()
+
 	row := q.db.QueryRowContext(ctx, `SELECT * FROM sample_text`)
 	return row.Err()
 }
 
 func (q *querier) Query2(ctx context.Context) error {
-	ctx, span := tracer().Start(ctx, "queryThing") // want "OpenTelemetry span misspelled, expected `\\(\\*querier\\).Query2`"
+	ctx, span := tracer().Start(ctx, "(*querier).Query2") // want "OpenTelemetry span misspelled, expected `\\(\\*querier\\).Query2`"
 	defer span.End()
 
 	row := q.db.QueryRowContext(ctx, `SELECT * FROM sample_text`)
@@ -64,6 +67,9 @@ func (q *querier) Query2(ctx context.Context) error {
 }
 
 func (q *querier) Query3(c context.Context) error { // want "Missing OpenTelemetry span"
+	c, span := tracer().Start(c, "(*querier).Query3")
+	defer span.End()
+
 	row := q.db.QueryRowContext(c, `SELECT * FROM sample_text`)
 	return row.Err()
 }

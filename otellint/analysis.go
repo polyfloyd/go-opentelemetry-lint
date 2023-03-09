@@ -37,8 +37,8 @@ func run(pass *analysis.Pass) (interface{}, error) {
 }
 
 func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
-	field := findFunctionContextArgument(pass, fn)
-	if field == nil {
+	contextField := findFunctionContextArgument(pass, fn)
+	if contextField == nil {
 		return
 	}
 	if isFunctionReturningContext(pass, fn) {
@@ -49,15 +49,24 @@ func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
 
 	otelStartCall, indexInStmtList := findFunctionOtelSpan(pass, fn)
 	if otelStartCall == nil {
+		insertPos := fn.Body.List[0].Pos()
 		pass.Report(analysis.Diagnostic{
 			Pos:     fn.Type.Pos(),
 			Message: fmt.Sprintf("Missing OpenTelemetry span for `%s`", funcName),
-			// TODO: SuggestedFixes:
+			SuggestedFixes: []analysis.SuggestedFix{{
+				Message: "Insert span",
+				TextEdits: []analysis.TextEdit{{
+					Pos:     insertPos,
+					End:     insertPos,
+					NewText: spanCallSrc(contextField, funcName),
+				}},
+			}},
 		})
 		return
 	}
 
-	spanNameArg, ok := otelStartCall.Args[1].(*ast.BasicLit)
+	spanNameLit := otelStartCall.Args[1]
+	spanNameArg, ok := spanNameLit.(*ast.BasicLit)
 	if !ok {
 		return
 	}
@@ -67,7 +76,14 @@ func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
 		pass.Report(analysis.Diagnostic{
 			Pos:     spanNameArg.ValuePos,
 			Message: fmt.Sprintf("OpenTelemetry span misspelled, expected `%s`", funcName),
-			// TODO: SuggestedFixes:
+			SuggestedFixes: []analysis.SuggestedFix{{
+				Message: "Alter span name",
+				TextEdits: []analysis.TextEdit{{
+					Pos:     spanNameLit.Pos(),
+					End:     spanNameLit.End(),
+					NewText: []byte(fmt.Sprintf("%q", funcName)),
+				}},
+			}},
 		})
 	}
 
@@ -151,4 +167,11 @@ func fullFuncName(pass *analysis.Pass, fn *ast.FuncDecl) string {
 		ptr = "*"
 	}
 	return fmt.Sprintf("(%s%s).%s", ptr, recvTypWithoutPackage, fn.Name.Name)
+}
+
+func spanCallSrc(contextVar *ast.Ident, funcName string) []byte {
+	return []byte(fmt.Sprintf(`%[1]s, span := tracer().Start(%[1]s, %q)
+defer span.End()
+
+`, contextVar.Name, funcName))
 }
