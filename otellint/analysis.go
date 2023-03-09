@@ -25,6 +25,9 @@ var (
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	for _, file := range pass.Files {
+		if isFileDoNotEdit(file) {
+			continue
+		}
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok {
@@ -34,6 +37,15 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		}
 	}
 	return nil, nil
+}
+
+func isFileDoNotEdit(file *ast.File) bool {
+	for _, group := range file.Comments {
+		for _, c := range group.List {
+			return strings.Contains(c.Text, "DO NOT EDIT")
+		}
+	}
+	return false
 }
 
 func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
