@@ -53,7 +53,13 @@ func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
 	if contextField == nil {
 		return
 	}
+
+	// Functions that acts as wrappers for setting and getting values set on
+	// the context are exempt.
 	if isFunctionReturningContext(pass, fn) {
+		return
+	}
+	if isFunctionUsingContextValueOnly(pass, fn, contextField.Obj) {
 		return
 	}
 
@@ -132,6 +138,49 @@ func isFunctionReturningContext(pass *analysis.Pass, fn *ast.FuncDecl) bool {
 	return false
 }
 
+func isFunctionUsingContextValueOnly(pass *analysis.Pass, fn *ast.FuncDecl, contextObj *ast.Object) bool {
+	// Check whether the context variable is referenced in, and only in,
+	// context.Value function calls.
+	//
+	// We do this by:
+	// * Counting how many times the context is referenced in the whole function body
+	// * Counting how many times context.Value is called
+	//
+	// A context.Value call counts as one general reference. Which means that
+	// if both counts are equal, only context.Value is called.
+
+	referenceCount := 0
+	referenceCountIgnore := 0
+
+	ast.Walk(astVisitorFunc(func(node ast.Node) {
+		if ident, ok := node.(*ast.Ident); ok && ident.Obj == contextObj {
+			referenceCount++
+		}
+
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return
+		}
+		fnSel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return
+		}
+		if ident, ok := fnSel.X.(*ast.Ident); !ok || ident.Obj != contextObj {
+			return
+		}
+		if fnSel.Sel.Name != "Value" {
+			return
+		}
+
+		referenceCountIgnore++
+	}), fn.Body)
+
+	if referenceCountIgnore > 0 {
+		return referenceCount == referenceCountIgnore
+	}
+	return false
+}
+
 func findFunctionOtelSpan(pass *analysis.Pass, fn *ast.FuncDecl) (*ast.CallExpr, int) {
 	for indexInStmtList, stmt := range fn.Body.List {
 		assign, ok := stmt.(*ast.AssignStmt)
@@ -186,4 +235,11 @@ func spanCallSrc(contextVar *ast.Ident, funcName string) []byte {
 defer span.End()
 
 `, contextVar.Name, funcName))
+}
+
+type astVisitorFunc func(ast.Node)
+
+func (fn astVisitorFunc) Visit(node ast.Node) ast.Visitor {
+	fn(node)
+	return fn
 }

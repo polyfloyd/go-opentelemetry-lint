@@ -22,6 +22,10 @@ func AddToContextButCanFail(ctx context.Context, thing string) (context.Context,
 	return context.WithValue(ctx, 1337, thing), nil
 }
 
+func GetFromContext(ctx context.Context) string {
+	return ctx.Value(1337).(string)
+}
+
 func SpanOk(ctx context.Context, db *sql.DB) error {
 	ctx, span := tracer().Start(ctx, "SpanOk")
 	defer span.End()
