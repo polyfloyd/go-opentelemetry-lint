@@ -3,6 +3,8 @@ package lint
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"net/http"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -70,4 +72,15 @@ func (q *querier) Query2(ctx context.Context) error {
 func (q *querier) Query3(c context.Context) error { // want "Missing OpenTelemetry span"
 	row := q.db.QueryRowContext(c, `SELECT * FROM sample_text`)
 	return row.Err()
+}
+
+func HTTPHanderMismatched(w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracer().Start(r.Context(), "HTTPHander") // want "OpenTelemetry span misspelled"
+	defer span.End()
+	_ = ctx
+
+	fmt.Fprintf(w, "hi")
+}
+func HTTPHanderMissingSpan(w http.ResponseWriter, r *http.Request) { // want "Missing OpenTelemetry span"
+	fmt.Fprintf(w, "hi")
 }

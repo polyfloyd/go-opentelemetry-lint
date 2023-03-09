@@ -4,6 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/parser"
+	"go/printer"
+	"go/token"
 	"go/types"
 	"strings"
 
@@ -49,8 +52,8 @@ func isFileDoNotEdit(file *ast.File) bool {
 }
 
 func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
-	contextField := findFunctionContextArgument(pass, fn)
-	if contextField == nil {
+	contextExpr := findFunctionContextArgument(pass, fn)
+	if contextExpr == nil {
 		return
 	}
 
@@ -59,14 +62,24 @@ func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
 	if isFunctionReturningContext(pass, fn) {
 		return
 	}
-	if isFunctionUsingContextValueOnly(pass, fn, contextField.Obj) {
-		return
+	if ident, ok := contextExpr.(*ast.Ident); ok {
+		if isFunctionUsingContextValueOnly(pass, fn, ident.Obj) {
+			return
+		}
 	}
 
 	funcName := fullFuncName(pass, fn)
 
 	otelStartCall, indexInStmtList := findFunctionOtelSpan(pass, fn)
 	if otelStartCall == nil {
+		var contextVar *ast.Ident
+		if ident, ok := contextExpr.(*ast.Ident); ok {
+			contextVar = ident
+		} else {
+			contextVar = &ast.Ident{NamePos: token.NoPos, Name: "ctx", Obj: nil}
+			// TODO: Look for r.Context() instances and replace those with `ctx`.
+		}
+
 		insertPos := fn.Body.List[0].Pos()
 		pass.Report(analysis.Diagnostic{
 			Pos:     fn.Type.Pos(),
@@ -76,7 +89,7 @@ func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
 				TextEdits: []analysis.TextEdit{{
 					Pos:     insertPos,
 					End:     insertPos,
-					NewText: spanCallSrc(contextField, funcName),
+					NewText: spanCallSrc(pass, contextExpr, contextVar, funcName),
 				}},
 			}},
 		})
@@ -108,21 +121,39 @@ func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
 	_ = indexInStmtList
 }
 
-func findFunctionContextArgument(pass *analysis.Pass, fn *ast.FuncDecl) *ast.Ident {
-	if len(fn.Type.Params.List) == 0 {
-		return nil // Ignore functions without parameters
-	}
-	field := fn.Type.Params.List[0]
-	if len(field.Names) != 1 {
-		return nil // Ignore multiple context arguments.
-	}
-
-	typ := pass.TypesInfo.Types[field.Type].Type
-	if typ.String() != "context.Context" {
+// findFunctionContextArgument returns the expression that can be used to
+// obtain the context passed.
+func findFunctionContextArgument(pass *analysis.Pass, fn *ast.FuncDecl) ast.Expr {
+	sig, ok := pass.TypesInfo.ObjectOf(fn.Name).Type().(*types.Signature)
+	if !ok {
 		return nil
 	}
 
-	return field.Names[0]
+	// If the function takes a context.Context as first argument, the
+	// corresponding identifier is returned.
+	if sig.Params().Len() >= 1 {
+		argType0 := sig.Params().At(0).Type().String()
+		if argType0 == "context.Context" {
+			return fn.Type.Params.List[0].Names[0]
+		}
+	}
+
+	// If the function arguments are compatible with net/http.HandlerFunc, then
+	// an expression that describes http.Request.Context() is returned.
+	if sig.Params().Len() == 2 {
+		argType0 := sig.Params().At(0).Type().String()
+		argType1 := sig.Params().At(1).Type().String()
+		if argType0 == "net/http.ResponseWriter" && argType1 == "*net/http.Request" {
+			r := fn.Type.Params.List[1].Names[0]
+			expr, err := parser.ParseExpr(fmt.Sprintf("%s.Context()", r))
+			if err != nil {
+				panic(err)
+			}
+			return expr
+		}
+	}
+
+	return nil
 }
 
 func isFunctionReturningContext(pass *analysis.Pass, fn *ast.FuncDecl) bool {
@@ -230,11 +261,17 @@ func fullFuncName(pass *analysis.Pass, fn *ast.FuncDecl) string {
 	return fmt.Sprintf("(%s%s).%s", ptr, recvTypWithoutPackage, fn.Name.Name)
 }
 
-func spanCallSrc(contextVar *ast.Ident, funcName string) []byte {
-	return []byte(fmt.Sprintf(`%[1]s, span := tracer().Start(%[1]s, %q)
+func spanCallSrc(pass *analysis.Pass, contextIn ast.Expr, contextOut *ast.Ident, funcName string) []byte {
+	var contextInBuf strings.Builder
+	printer.Fprint(&contextInBuf, pass.Fset, contextIn)
+
+	// Wtf, where is this whitespace coming from???
+	contextInSrc := strings.ReplaceAll(strings.ReplaceAll(contextInBuf.String(), "\t", ""), "\n", "")
+
+	return []byte(fmt.Sprintf(`%s, span := tracer().Start(%s, %q)
 defer span.End()
 
-`, contextVar.Name, funcName))
+`, contextOut.Name, contextInSrc, funcName))
 }
 
 type astVisitorFunc func(ast.Node)
