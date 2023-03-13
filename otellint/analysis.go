@@ -28,7 +28,7 @@ var (
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	for _, file := range pass.Files {
-		if isFileDoNotEdit(file) {
+		if isFileDoNotEdit(file) || isFileATest(pass, file) {
 			continue
 		}
 		for _, decl := range file.Decls {
@@ -49,6 +49,10 @@ func isFileDoNotEdit(file *ast.File) bool {
 		}
 	}
 	return false
+}
+func isFileATest(pass *analysis.Pass, file *ast.File) bool {
+	inf := pass.Fset.Position(file.FileStart)
+	return strings.HasSuffix(inf.Filename, "_test.go")
 }
 
 func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
