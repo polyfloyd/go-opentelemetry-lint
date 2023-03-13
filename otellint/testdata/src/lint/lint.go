@@ -84,3 +84,11 @@ func HTTPHanderMismatched(w http.ResponseWriter, r *http.Request) {
 func HTTPHanderMissingSpan(w http.ResponseWriter, r *http.Request) { // want "Missing OpenTelemetry span"
 	fmt.Fprintf(w, "hi")
 }
+
+func ContextNotNamed(context.Context) { // want "Missing OpenTelemetry span"
+	a := 1
+	_ = a
+}
+
+func EmptyFunction(ctx context.Context) { // want "Missing OpenTelemetry span"
+}

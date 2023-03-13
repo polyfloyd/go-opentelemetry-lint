@@ -93,3 +93,17 @@ func HTTPHanderMissingSpan(w http.ResponseWriter, r *http.Request) { // want "Mi
 
 	fmt.Fprintf(w, "hi")
 }
+
+func ContextNotNamed(context.Context) { // want "Missing OpenTelemetry span"
+	ctx, span := tracer().Start(ctx, "ContextNotNamed")
+	defer span.End()
+
+	a := 1
+	_ = a
+}
+
+func EmptyFunction(ctx context.Context) { // want "Missing OpenTelemetry span"
+	ctx, span := tracer().Start(ctx, "EmptyFunction")
+	defer span.End()
+
+}

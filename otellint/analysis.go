@@ -80,7 +80,10 @@ func lintFunction(pass *analysis.Pass, fn *ast.FuncDecl) {
 			// TODO: Look for r.Context() instances and replace those with `ctx`.
 		}
 
-		insertPos := fn.Body.List[0].Pos()
+		insertPos := fn.Body.Rbrace
+		if len(fn.Body.List) > 0 {
+			insertPos = fn.Body.List[0].Pos()
+		}
 		pass.Report(analysis.Diagnostic{
 			Pos:     fn.Type.Pos(),
 			Message: fmt.Sprintf("Missing OpenTelemetry span for `%s`", funcName),
@@ -134,7 +137,11 @@ func findFunctionContextArgument(pass *analysis.Pass, fn *ast.FuncDecl) ast.Expr
 	if sig.Params().Len() >= 1 {
 		argType0 := sig.Params().At(0).Type().String()
 		if argType0 == "context.Context" {
-			return fn.Type.Params.List[0].Names[0]
+			argField := fn.Type.Params.List[0]
+			if len(argField.Names) == 0 {
+				return mustParseExpr("ctx")
+			}
+			return argField.Names[0]
 		}
 	}
 
@@ -145,11 +152,7 @@ func findFunctionContextArgument(pass *analysis.Pass, fn *ast.FuncDecl) ast.Expr
 		argType1 := sig.Params().At(1).Type().String()
 		if argType0 == "net/http.ResponseWriter" && argType1 == "*net/http.Request" {
 			r := fn.Type.Params.List[1].Names[0]
-			expr, err := parser.ParseExpr(fmt.Sprintf("%s.Context()", r))
-			if err != nil {
-				panic(err)
-			}
-			return expr
+			return mustParseExpr(fmt.Sprintf("%s.Context()", r))
 		}
 	}
 
@@ -279,4 +282,12 @@ type astVisitorFunc func(ast.Node)
 func (fn astVisitorFunc) Visit(node ast.Node) ast.Visitor {
 	fn(node)
 	return fn
+}
+
+func mustParseExpr(src string) ast.Expr {
+	expr, err := parser.ParseExpr(src)
+	if err != nil {
+		panic(err)
+	}
+	return expr
 }
