@@ -23,10 +23,28 @@ func NewAnalyzer() *analysis.Analyzer {
 }
 
 var (
-	flagSet flag.FlagSet
+	flagSet     flag.FlagSet
+	tracerStyle TracerStyle = TracerStyleFunc
+)
+
+func init() {
+	flagSet.StringVar((*string)(&tracerStyle), "tracer-style", string(TracerStyleFunc), "How the otel.Tracer should be invoked")
+}
+
+type TracerStyle string
+
+const (
+	TracerStyleFunc  TracerStyle = "func"
+	TracerStyleConst TracerStyle = "const"
 )
 
 func run(pass *analysis.Pass) (interface{}, error) {
+	switch tracerStyle {
+	case TracerStyleFunc, TracerStyleConst:
+	default:
+		return nil, fmt.Errorf("invalid tracer-style: %q", tracerStyle)
+	}
+
 	for _, file := range pass.Files {
 		if isFileDoNotEdit(file) || isFileATest(pass, file) {
 			continue
@@ -275,10 +293,20 @@ func spanCallSrc(pass *analysis.Pass, contextIn ast.Expr, contextOut *ast.Ident,
 	// Wtf, where is this whitespace coming from???
 	contextInSrc := strings.ReplaceAll(strings.ReplaceAll(contextInBuf.String(), "\t", ""), "\n", "")
 
-	return []byte(fmt.Sprintf(`%s, span := tracer().Start(%s, %q)
+	switch tracerStyle {
+	case TracerStyleFunc:
+		return []byte(fmt.Sprintf(`%s, span := tracer().Start(%s, %q)
 defer span.End()
 
 `, contextOut.Name, contextInSrc, funcName))
+	case TracerStyleConst:
+		return []byte(fmt.Sprintf(`%s, span := otel.Tracer(tracerName).Start(%s, %q)
+defer span.End()
+
+`, contextOut.Name, contextInSrc, funcName))
+	default:
+		panic("unreachable")
+	}
 }
 
 type astVisitorFunc func(ast.Node)
