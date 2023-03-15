@@ -10,8 +10,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const tracerName = "testdata/lint"
-
 func tracer() trace.Tracer {
 	return otel.Tracer("testdata/lint")
 }
@@ -30,14 +28,6 @@ func GetFromContext(ctx context.Context) string {
 
 func SpanOk(ctx context.Context, db *sql.DB) error {
 	ctx, span := tracer().Start(ctx, "SpanOk")
-	defer span.End()
-
-	row := db.QueryRowContext(ctx, `SELECT * FROM sample_text`)
-	return row.Err()
-}
-
-func SpanOkOtherStyle(ctx context.Context, db *sql.DB) error {
-	ctx, span := otel.Tracer(tracerName).Start(ctx, "SpanOkOtherStyle")
 	defer span.End()
 
 	row := db.QueryRowContext(ctx, `SELECT * FROM sample_text`)

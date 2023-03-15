@@ -24,11 +24,13 @@ func NewAnalyzer() *analysis.Analyzer {
 
 var (
 	flagSet     flag.FlagSet
-	tracerStyle TracerStyle = TracerStyleFunc
+	tracerStyle TracerStyle
+	tracerName  string
 )
 
 func init() {
 	flagSet.StringVar((*string)(&tracerStyle), "tracer-style", string(TracerStyleFunc), "How the otel.Tracer should be invoked")
+	flagSet.StringVar(&tracerName, "tracer-name", "tracer", "The name of the function or const that should be invoced to get an otel.Tracer")
 }
 
 type TracerStyle string
@@ -43,6 +45,9 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	case TracerStyleFunc, TracerStyleConst:
 	default:
 		return nil, fmt.Errorf("invalid tracer-style: %q", tracerStyle)
+	}
+	if tracerName == "" {
+		return nil, fmt.Errorf("tracer-name is empty")
 	}
 
 	for _, file := range pass.Files {
@@ -295,15 +300,15 @@ func spanCallSrc(pass *analysis.Pass, contextIn ast.Expr, contextOut *ast.Ident,
 
 	switch tracerStyle {
 	case TracerStyleFunc:
-		return []byte(fmt.Sprintf(`%s, span := tracer().Start(%s, %q)
+		return []byte(fmt.Sprintf(`%s, span := %s().Start(%s, %q)
 defer span.End()
 
-`, contextOut.Name, contextInSrc, funcName))
+`, contextOut.Name, tracerName, contextInSrc, funcName))
 	case TracerStyleConst:
-		return []byte(fmt.Sprintf(`%s, span := otel.Tracer(tracerName).Start(%s, %q)
+		return []byte(fmt.Sprintf(`%s, span := otel.Tracer(%s).Start(%s, %q)
 defer span.End()
 
-`, contextOut.Name, contextInSrc, funcName))
+`, contextOut.Name, tracerName, contextInSrc, funcName))
 	default:
 		panic("unreachable")
 	}

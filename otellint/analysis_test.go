@@ -16,5 +16,8 @@ func TestTracerStyleConst(t *testing.T) {
 	if err := analyzer.Flags.Set("tracer-style", "const"); err != nil {
 		log.Fatal(err)
 	}
+	if err := analyzer.Flags.Set("tracer-name", "tracerName"); err != nil {
+		log.Fatal(err)
+	}
 	analysistest.RunWithSuggestedFixes(t, analysistest.TestData(), analyzer, "tracer-style-const")
 }
