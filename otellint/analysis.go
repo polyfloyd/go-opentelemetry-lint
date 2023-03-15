@@ -30,7 +30,7 @@ var (
 
 func init() {
 	flagSet.StringVar((*string)(&tracerStyle), "tracer-style", string(TracerStyleFunc), "How the otel.Tracer should be invoked")
-	flagSet.StringVar(&tracerName, "tracer-name", "tracer", "The name of the function or const that should be invoced to get an otel.Tracer")
+	flagSet.StringVar(&tracerName, "tracer-name", "tracer", "The name of the function or const that should be invoked to get an otel.Tracer")
 }
 
 type TracerStyle string
