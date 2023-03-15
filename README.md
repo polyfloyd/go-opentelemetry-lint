@@ -12,7 +12,6 @@ go-errorlint ./...
 ```
 
 The linter is disabled for:
-* Files containing unit tests
 * Files that have `DO NOT EDIT` in their top level comment, as is typical for automatically
   generated files
 
