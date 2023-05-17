@@ -22,9 +22,7 @@ jobs:
 
     - run: go get -v -t -d ./...
     - run: go build -v
-     # testdata requires dependencies which are symlinked to ./vendor
-    - run: go mod vendor
-    - run: go test -test.v -race -cover
+    - run: go test -test.v -race -cover ./...
 
   conventional-commits:
     runs-on: ubuntu-latest

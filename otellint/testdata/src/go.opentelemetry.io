@@ -1,1 +1,0 @@
-../../../vendor/go.opentelemetry.io/
