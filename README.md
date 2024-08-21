@@ -8,7 +8,7 @@ This linter helps with properly using the OpenTelemetry SDK for Go.
 ## Usage
 go-opentelemetry-lint accepts a set of package names similar to golint:
 ```
-go-errorlint ./...
+go-opentelemetry-lint ./...
 ```
 
 The linter is disabled for:
