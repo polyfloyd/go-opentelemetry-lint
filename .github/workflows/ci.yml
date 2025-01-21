@@ -24,6 +24,20 @@ jobs:
     - run: go build -v
     - run: go test -test.v -race -cover ./...
 
+  go-mod-tidy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version: stable
+
+    - run: |
+        go mod tidy
+        git diff --exit-code go.mod
+        git diff --exit-code go.sum
+
   conventional-commits:
     runs-on: ubuntu-latest
 
