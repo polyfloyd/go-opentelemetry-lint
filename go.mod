@@ -1,6 +1,7 @@
 module github.com/polyfloyd/go-opentelemetry-lint
 
-go 1.23
+go 1.23.0
+
 toolchain go1.24.1
 
 require golang.org/x/tools v0.31.0
