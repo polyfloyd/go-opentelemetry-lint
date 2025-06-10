@@ -1,8 +1,6 @@
 go-opentelemetry-lint
 =====================
 
-[![Build Status](https://github.com/polyfloyd/go-opentelemetry-lint/workflows/CI/badge.svg)](https://github.com/polyfloyd/go-opentelemetry-lint/actions)
-
 This linter helps with properly using the OpenTelemetry SDK for Go.
 
 ## Usage
